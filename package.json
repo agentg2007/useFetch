@@ -1,6 +1,39 @@
 {
-  "dependencies": {
-    "react": "^18.2.0",
-    "typescript": "^4.8.4"
-  }
+	"name": "@nthity/usefetch",
+	"version": "1.0.1-beta.0",
+	"main": "dist/index.js",
+	"publishConfig": {
+		"access": "public"
+	},
+	"scripts": {
+		"build": "npx tsc",
+		"prepublish": "npm run build",
+		"prerelease:beta": "npm version prerelease --preid=beta"
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/agentg2007/useFetch.git"
+	},
+	"keywords": [
+		"react",
+		"useFetch",
+		"fetch"
+	],
+	"author": "agentg2007",
+	"license": "MIT",
+	"bugs": {
+		"url": "https://github.com/agentg2007/useFetch/issues"
+	},
+	"homepage": "https://github.com/agentg2007/useFetch#readme",
+	"peerDependencies": {
+		"react": "^17.0||^18"
+	},
+	"devDependencies": {
+		"@types/react": "^18.0.21",
+		"typescript": "^4.8.4"
+	},
+	"files": [
+		"dist",
+		"README.md"
+	]
 }
