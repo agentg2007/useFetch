@@ -1,17 +1,23 @@
-import React, { useCallback, useEffect, useReducer, useState } from "react";
+import React, { useCallback, useEffect, useReducer } from "react";
 
 type UseFetchResultType<TData> = {
     data: TData;
     statusCode: number;
     statusText: string;
 }
-type UseFetchStatuses = "idle" | "busy" | "cancelled" | "error";
+type UseFetchStatuses = "idle" | "busy" | "aborted" | "error";
 type UseFetchState<TData> = {
     result: UseFetchResultType<TData>;
     status: UseFetchStatuses;
     initialized: boolean;
+    controller: AbortController;
 };
-type UseFetchActions = "setInitialized" | "setResult" | "setStatus";
+type UseFetchActions = "aborted"
+    | "setError"
+    | "setInitialized"
+    | "setController"
+    | "setResult"
+    | "setStatus";
 type UseFetchReducerType<TData = any> = React.Reducer<UseFetchState<TData>, {
     type: UseFetchActions;
     payload: any;
@@ -20,97 +26,97 @@ type UseFetchReducerType<TData = any> = React.Reducer<UseFetchState<TData>, {
 const UseFetchReducer: UseFetchReducerType = (state, { type, payload }) => {
     const upst = (newState: Partial<UseFetchState<any>>) => ({ ...state, ...newState });
     switch (type) {
+        case "aborted": return upst({
+            status: "aborted", result: {
+                data: null, statusCode: 230, statusText: "Client aborted the request."
+            }
+        })
+        case "setError":
+            return upst({ status: "error", result: payload });
         case "setResult":
-            return upst({ result: payload });
+            return upst({ status: "idle", result: payload });
         case "setInitialized":
-            return upst({ initialized: payload === true });
+            if (payload === true) {
+                return upst({ initialized: true, })
+            } else {
+                state.controller?.abort();
+                return upst({ initialized: false, controller: null });
+            }
         case "setStatus":
             return upst({ status: payload });
+        case "setController":
+            return upst({ controller: payload });
         default:
             return state;
     }
 }
 
 export default <TData = any>(output: "json" | "text" | "blob" = "json") => {
-    const [controller, setController] = useState<AbortController>();
     const [state, d] = useReducer<UseFetchReducerType<TData>>(UseFetchReducer, {
         result: null,
         initialized: false,
         status: "idle",
+        controller: new AbortController()
     });
     const dispatch = (type: UseFetchActions, payload?: any) => d({ type, payload });
     const f = (d: UseFetchResultType<TData>) => d;
 
-    const cancel = useCallback(() => {
-        if (controller != null) {
-            controller.abort();
-        }
-    }, [controller]);
-    const fetchInternal = useCallback(async (input: RequestInfo, init: RequestInit) => {
+    const abort = useCallback(() => {
+        console.log("ABORTED")
+        state.controller?.abort();
+    }, [state.controller]);
+    const fetchInternal = useCallback((input: RequestInfo, init?: RequestInit) => {
         if (!state.initialized) return;
         dispatch("setStatus", "busy");
+
+        state.controller?.abort();
+
         const abortController = new AbortController();
-        setController(c => {
-            c != null && c.abort();
-            return abortController;
-        });
-        const data = await fetch(input, {
+        fetch(input, {
             ...init,
             signal: abortController.signal
         }).then(async r => {
-            const get = async () => {
-                if (r.ok) {
-                    const out = async () => {
-                        switch (output) {
-                            case "blob": return await r.blob();
-                            case "text": return await r.text();
-                            default: return await r.json();
-                        }
+            if (r.ok) {
+                const out = async () => {
+                    switch (output) {
+                        case "blob": return await r.blob();
+                        case "text": return await r.text();
+                        default: return await r.json();
                     }
-                    const data = await out();
-                    dispatch("setStatus", "idle");
-                    return data;
-                } else {
-                    dispatch("setStatus", "error");
-                    return null
                 }
+                dispatch("setResult", f({
+                    data: await out(),
+                    statusCode: r.status,
+                    statusText: r.statusText,
+                }));
+            } else {
+                dispatch("setError", f({
+                    data: null, statusCode: r.status, statusText: r.statusText,
+                }));
             }
-            return f({
-                statusCode: r.status,
-                statusText: r.statusText,
-                data: await get(),
-            })
         }).catch(e => {
-            dispatch("setStatus", "error");
-            return f({
-                data: null,
-                statusCode: 500,
-                statusText: e.message
-            });
-        }).finally(() => setController(null));
-        dispatch("setResult", data);
-    }, [state.initialized]);
+            if (abortController.signal.aborted) {
+                dispatch("aborted");
+            } else {
+                dispatch("setError", f({
+                    data: null, statusCode: 500, statusText: e.message
+                }));
+            }
+        });
+        dispatch("setController", abortController);
+    }, [state.initialized, state.controller]);
 
     useEffect(() => {
         dispatch("setInitialized", true);
-        return () => {
-            dispatch("setInitialized", false);
-            setController(c => {
-                c != null && c.abort();
-                return null;
-            });
-        };
+        return () => dispatch("setInitialized", false);
     }, []);
-    useEffect(() => {
-        return () => cancel();
-    }, [cancel]);
 
     return {
         initialized: state.initialized,
         result: state.result,
         status: state.status,
         fetch: fetchInternal,
-        cancel,
+        abort,
     }
 };
 
