@@ -30,7 +30,7 @@ const UseFetchReducer: UseFetchReducerType = (state, { type, payload }) => {
             status: "aborted", result: {
                 data: null, statusCode: 230, statusText: "Client aborted the request."
             }
-        })
+        });
         case "setError":
             return upst({ status: "error", result: payload });
         case "setResult":
@@ -62,7 +62,6 @@ export default <TData = any>(output: "json" | "text" | "blob" = "json") => {
     const f = (d: UseFetchResultType<TData>) => d;
 
     const abort = useCallback(() => {
-        console.log("ABORTED")
         state.controller?.abort();
     }, [state.controller]);
     const fetchInternal = useCallback((input: RequestInfo, init?: RequestInit) => {
@@ -115,8 +114,8 @@ export default <TData = any>(output: "json" | "text" | "blob" = "json") => {
         initialized: state.initialized,
         result: state.result,
         status: state.status,
-        fetch: fetchInternal,
         abort,
+        fetch: fetchInternal,
     }
 };
 
