@@ -63,14 +63,14 @@ export default <TData = any>(output: "json" | "text" | "blob" = "json") => {
 
     const abort = useCallback(() => {
         state.controller?.abort();
+        dispatch("aborted");
     }, [state.controller]);
     const fetchInternal = useCallback((input: RequestInfo, init?: RequestInit) => {
         if (!state.initialized) return;
-        dispatch("setStatus", "busy");
 
         state.controller?.abort();
-
         const abortController = new AbortController();
+        dispatch("setStatus", "busy");
         fetch(input, {
             ...init,
             signal: abortController.signal
@@ -95,7 +95,7 @@ export default <TData = any>(output: "json" | "text" | "blob" = "json") => {
             }
         }).catch(e => {
             if (abortController.signal.aborted) {
-                dispatch("aborted");
+                //don't send signal
             } else {
                 dispatch("setError", f({
                     data: null, statusCode: 500, statusText: e.message
